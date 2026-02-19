@@ -2,28 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Presenta by MAHADUMIA</title>
     
-    <!-- Tailwind CSS for styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- FontAwesome for Icons -->
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- PDF.js library -->
+    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+    <!-- Panzoom (For smooth Pinch & Zoom gestures) -->
+    <script src="https://unpkg.com/panzoom@9.4.0/dist/panzoom.min.js"></script>
 
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        brand: {
-                            orange: '#f97316', // Tailwind orange-500
-                            dark: '#000000',
-                            light: '#ffffff'
-                        }
+                        brand: { orange: '#f97316', dark: '#000000', light: '#ffffff' }
                     }
                 }
             }
@@ -31,134 +30,114 @@
     </script>
 
     <style>
-        /* Custom scrollbar for tabs */
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        body { overscroll-behavior-y: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        canvas { user-select: none; -webkit-user-select: none; }
         
-        /* Prevent pull-to-refresh and bounce on mobile */
-        body {
-            overscroll-behavior-y: none;
-            touch-action: none;
-        }
-
-        /* Ensure canvases don't trigger selection */
-        canvas {
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .pdf-canvas-container {
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            overflow-y: auto;
-            height: 100%;
-            width: 100%;
-            background-color: #f3f4f6; /* Gray-100 */
-        }
+        /* Smooth UI Transitions */
+        .ui-transition { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .ui-hidden-top { transform: translateY(-100%); }
+        .ui-hidden-bottom { transform: translateY(100%); }
     </style>
 </head>
-<body class="bg-brand-light text-brand-dark h-screen w-screen flex flex-col overflow-hidden font-sans">
+<body class="bg-gray-900 text-brand-dark h-screen w-screen flex flex-col overflow-hidden font-sans relative">
 
-    <!-- Header -->
-    <header class="bg-brand-dark text-brand-light h-14 flex justify-between items-center px-4 flex-shrink-0 shadow-md z-20">
-        <div class="flex items-center gap-2">
-            <i class="fa-solid fa-layer-group text-brand-orange text-xl"></i>
-            <h1 class="text-brand-orange font-bold text-xl tracking-wide">
-                Presenta <span class="text-xs font-light text-brand-light ml-1 opacity-80">by MAHADUMIA</span>
-            </h1>
-        </div>
-        <div>
-            <button id="add-pdf-btn" class="bg-brand-orange hover:bg-orange-600 text-white px-3 py-1.5 rounded shadow-sm flex items-center gap-2 transition-colors">
-                <i class="fa-solid fa-file-pdf"></i>
-                <span class="hidden sm:inline font-semibold">Open PDF</span>
-            </button>
-            <input type="file" id="pdf-upload" accept="application/pdf" class="hidden">
-        </div>
-    </header>
-
-    <!-- Tabs Navigation -->
-    <nav class="bg-gray-100 border-b border-gray-300 h-12 flex-shrink-0 flex items-center px-2 hide-scrollbar overflow-x-auto shadow-sm z-10" id="tab-bar">
-        <!-- Tabs will be dynamically injected here -->
-    </nav>
-
-    <!-- Main Workspace Area -->
-    <main id="workspace" class="flex-1 relative overflow-hidden bg-gray-200">
+    <!-- ================= UI OVERLAY (Auto-Hides) ================= -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between z-50 overflow-hidden">
         
-        <!-- ================= WHITEBOARD VIEW (Always exists) ================= -->
-        <div id="view-whiteboard" class="absolute inset-0 bg-white flex flex-col view-container" style="display: block;">
-            
-            <!-- Canvas Container -->
-            <div class="flex-1 relative w-full h-full" id="wb-container">
-                <canvas id="wb-canvas" class="absolute top-0 left-0 w-full h-full cursor-crosshair touch-none"></canvas>
-            </div>
-
-            <!-- Hamburger Settings Button -->
-            <button id="wb-menu-btn" class="absolute top-4 right-4 w-12 h-12 bg-brand-dark text-brand-light rounded-full shadow-lg flex items-center justify-center text-xl hover:bg-gray-800 transition-transform active:scale-95 z-20">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-
-            <!-- Hamburger Settings Panel -->
-            <div id="wb-settings-panel" class="hidden absolute top-16 right-4 w-64 bg-white border border-gray-200 shadow-2xl rounded-lg p-5 z-30 flex flex-col gap-4">
-                <div class="flex justify-between items-center border-b pb-2">
-                    <h3 class="font-bold text-gray-800">Ink Settings</h3>
-                    <button id="wb-close-menu" class="text-gray-500 hover:text-brand-dark"><i class="fa-solid fa-xmark"></i></button>
+        <!-- Top Bar Group -->
+        <div id="top-bar" class="ui-transition pointer-events-auto">
+            <!-- Header -->
+            <header class="bg-brand-dark text-brand-light h-14 flex justify-between items-center px-4 flex-shrink-0 shadow-md">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-brand-orange text-xl"></i>
+                    <h1 class="text-brand-orange font-bold text-xl tracking-wide">
+                        Presenta <span class="text-xs font-light text-gray-300 ml-1">by MAHADUMIA</span>
+                    </h1>
                 </div>
-                
-                <!-- Color Picker -->
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Color</label>
-                    <div class="flex gap-2 flex-wrap" id="color-palette">
-                        <button class="w-8 h-8 rounded-full bg-black border-2 border-gray-300 color-btn" data-color="#000000"></button>
-                        <button class="w-8 h-8 rounded-full bg-brand-orange border-2 border-transparent color-btn ring-2 ring-brand-orange ring-offset-1" data-color="#f97316"></button>
-                        <button class="w-8 h-8 rounded-full bg-blue-600 border-2 border-transparent color-btn" data-color="#2563eb"></button>
-                        <button class="w-8 h-8 rounded-full bg-green-600 border-2 border-transparent color-btn" data-color="#16a34a"></button>
-                        <button class="w-8 h-8 rounded-full bg-red-600 border-2 border-transparent color-btn" data-color="#dc2626"></button>
-                        <!-- Eraser -->
-                        <button class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 color-btn flex items-center justify-center text-gray-400" data-color="#ffffff" title="Eraser">
-                            <i class="fa-solid fa-eraser text-xs"></i>
-                        </button>
-                    </div>
+                    <button id="add-pdf-btn" class="bg-brand-orange hover:bg-orange-600 text-white px-4 py-1.5 rounded shadow-sm flex items-center gap-2 active:scale-95 transition-transform">
+                        <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline font-semibold">Open PDF</span>
+                    </button>
+                    <input type="file" id="pdf-upload" accept="application/pdf" class="hidden">
                 </div>
+            </header>
 
-                <!-- Pen Size -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Pen Size (<span id="size-label">3</span>px)</label>
-                    <input type="range" id="pen-size" min="1" max="20" value="3" class="w-full accent-brand-orange">
-                </div>
-                
-                <button id="wb-clear-btn" class="mt-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded border border-gray-300 transition-colors">
-                    <i class="fa-solid fa-trash-can mr-2"></i> Clear Whiteboard
-                </button>
-            </div>
+            <!-- Tabs Navigation -->
+            <nav class="bg-gray-100 border-b border-gray-300 h-12 flex items-center px-2 hide-scrollbar overflow-x-auto shadow-sm" id="tab-bar">
+                <!-- Tabs injected here -->
+            </nav>
         </div>
 
-        <!-- PDF Views will be dynamically appended here as absolute full-size containers -->
+        <!-- Bottom Bar Group -->
+        <div id="bottom-bar" class="ui-transition pointer-events-auto bg-brand-dark/95 backdrop-blur shadow-[0_-5px_20px_rgba(0,0,0,0.3)] w-full h-16 flex justify-center items-center px-2">
+            
+            <!-- PDF Controls -->
+            <div id="controls-pdf" class="hidden flex items-center gap-6 text-white w-full max-w-md justify-between px-4">
+                <button id="pdf-prev" class="w-12 h-12 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 text-xl shadow-lg active:scale-90 transition-transform"><i class="fa-solid fa-chevron-left"></i></button>
+                <div id="pdf-info" class="font-bold tracking-widest text-lg bg-black/50 px-4 py-1 rounded-full border border-gray-600">1 / 1</div>
+                <button id="pdf-next" class="w-12 h-12 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 text-xl shadow-lg active:scale-90 transition-transform"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
 
+            <!-- Whiteboard Controls -->
+            <div id="controls-wb" class="hidden flex items-center justify-evenly w-full max-w-lg gap-2 overflow-x-auto hide-scrollbar px-2">
+                <!-- Undo/Redo -->
+                <button id="wb-undo" class="w-10 h-10 rounded-full bg-gray-700 text-white flex items-center justify-center active:scale-90 transition-transform disabled:opacity-30"><i class="fa-solid fa-rotate-left"></i></button>
+                <button id="wb-redo" class="w-10 h-10 rounded-full bg-gray-700 text-white flex items-center justify-center active:scale-90 transition-transform disabled:opacity-30"><i class="fa-solid fa-rotate-right"></i></button>
+                
+                <div class="w-px h-8 bg-gray-600 mx-1"></div>
+                
+                <!-- Colors -->
+                <button class="w-9 h-9 rounded-full bg-white color-btn ring-2 ring-brand-orange ring-offset-2 ring-offset-brand-dark" data-color="#ffffff"></button>
+                <button class="w-9 h-9 rounded-full bg-brand-orange color-btn border border-transparent" data-color="#f97316"></button>
+                <button class="w-9 h-9 rounded-full bg-blue-500 color-btn border border-transparent" data-color="#3b82f6"></button>
+                <button class="w-9 h-9 rounded-full bg-green-500 color-btn border border-transparent" data-color="#22c55e"></button>
+                
+                <div class="w-px h-8 bg-gray-600 mx-1"></div>
+
+                <!-- Tools -->
+                <button id="wb-eraser" class="w-10 h-10 rounded-full bg-gray-700 text-white flex items-center justify-center active:scale-90 transition-transform"><i class="fa-solid fa-eraser"></i></button>
+                <button id="wb-clear" class="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center active:scale-90 transition-transform"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- Hidden trigger zone to bring UI back up -->
+    <div id="ui-reveal-trigger" class="absolute bottom-0 left-0 right-0 h-20 z-40"></div>
+
+    <!-- ================= MAIN WORKSPACE ================= -->
+    <main id="workspace" class="absolute inset-0 bg-gray-900 overflow-hidden z-10">
+        
+        <!-- Whiteboard View -->
+        <div id="view-whiteboard" class="absolute inset-0 bg-gray-900 view-container" style="display: block;">
+            <canvas id="wb-canvas" class="absolute top-0 left-0 w-full h-full cursor-crosshair touch-none"></canvas>
+        </div>
+
+        <!-- PDF Views appended here dynamically -->
     </main>
 
     <script>
-        // ==========================================
-        // CONFIGURATION & STATE
-        // ==========================================
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
+        // ==========================================
+        // STATE MANAGEMENT
+        // ==========================================
         const state = {
-            tabs: [
-                { id: 'whiteboard', title: 'Whiteboard', type: 'whiteboard', icon: 'fa-pen-to-square' }
-            ],
+            tabs: [{ id: 'whiteboard', title: 'Whiteboard', type: 'whiteboard', icon: 'fa-pen-to-square' }],
             activeTabId: 'whiteboard',
-            pdfs: {}, // stores PDFDocumentProxy and page state per tab ID
+            pdfs: {},
             whiteboard: {
                 isDrawing: false,
-                color: '#f97316', // Default to brand orange
-                size: 3
-            }
+                color: '#ffffff', // Default white ink for dark mode whiteboard
+                isEraser: false,
+                size: 4,
+                paths: [], // Vector paths for memory-safe undo
+                redoPaths: [],
+                currentPath: null
+            },
+            ui: { isVisible: true, timeout: null }
         };
 
         // DOM Elements
@@ -166,411 +145,424 @@
         const workspace = document.getElementById('workspace');
         const pdfUploadInput = document.getElementById('pdf-upload');
         const addPdfBtn = document.getElementById('add-pdf-btn');
+        
+        // UI Overlay Elements
+        const topBar = document.getElementById('top-bar');
+        const bottomBar = document.getElementById('bottom-bar');
+        const controlsPdf = document.getElementById('controls-pdf');
+        const controlsWb = document.getElementById('controls-wb');
+        const revealTrigger = document.getElementById('ui-reveal-trigger');
 
+        // ==========================================
+        // IMMERSIVE UI LOGIC
+        // ==========================================
+        function resetUITimer() {
+            clearTimeout(state.ui.timeout);
+            if (state.ui.isVisible) {
+                state.ui.timeout = setTimeout(hideUI, 5000);
+            }
+        }
+
+        function showUI() {
+            state.ui.isVisible = true;
+            topBar.classList.remove('ui-hidden-top');
+            bottomBar.classList.remove('ui-hidden-bottom');
+            revealTrigger.style.pointerEvents = 'none'; // Disable trigger when UI is visible
+            resetUITimer();
+        }
+
+        function hideUI() {
+            if (state.whiteboard.isDrawing) return; // Don't hide while actively drawing
+            state.ui.isVisible = false;
+            topBar.classList.add('ui-hidden-top');
+            bottomBar.classList.add('ui-hidden-bottom');
+            revealTrigger.style.pointerEvents = 'auto'; // Enable trigger to show UI
+        }
+
+        // Tap bottom edge to reveal
+        revealTrigger.addEventListener('click', showUI);
+        revealTrigger.addEventListener('touchstart', showUI, {passive: true});
+
+        // Any interaction with UI resets the hide timer
+        topBar.addEventListener('touchstart', resetUITimer, {passive: true});
+        bottomBar.addEventListener('touchstart', resetUITimer, {passive: true});
+        topBar.addEventListener('mousemove', resetUITimer, {passive: true});
+        
         // ==========================================
         // TAB MANAGEMENT
         // ==========================================
-        
         function renderTabs() {
             tabBar.innerHTML = '';
             state.tabs.forEach(tab => {
                 const isActive = tab.id === state.activeTabId;
                 const tabEl = document.createElement('div');
                 
-                // Styling active vs inactive
-                const baseClasses = "flex items-center gap-2 px-4 py-2 mx-1 rounded-t-lg cursor-pointer transition-colors min-w-max select-none";
-                const activeClasses = "bg-white text-brand-dark border-t-2 border-brand-orange font-bold shadow-[0_-2px_5px_rgba(0,0,0,0.05)]";
-                const inactiveClasses = "bg-gray-200 text-gray-600 hover:bg-gray-300 font-medium";
+                const baseClasses = "flex items-center gap-2 px-5 py-2.5 mx-1 rounded-t-lg cursor-pointer transition-all min-w-max select-none";
+                const activeClasses = "bg-brand-dark text-white border-t-4 border-brand-orange font-bold shadow-lg transform scale-105 z-10";
+                const inactiveClasses = "bg-gray-300 text-gray-700 hover:bg-gray-400 font-medium";
                 
                 tabEl.className = `${baseClasses} ${isActive ? activeClasses : inactiveClasses}`;
                 tabEl.onclick = () => switchTab(tab.id);
 
-                // Icon
-                const icon = document.createElement('i');
-                icon.className = `fa-solid ${tab.icon} ${isActive ? 'text-brand-orange' : 'text-gray-500'}`;
-                tabEl.appendChild(icon);
+                tabEl.innerHTML = `
+                    <i class="fa-solid ${tab.icon} ${isActive ? 'text-brand-orange' : 'text-gray-500'}"></i>
+                    <span>${tab.title.length > 15 ? tab.title.substring(0, 15) + '...' : tab.title}</span>
+                `;
 
-                // Title
-                const titleSpan = document.createElement('span');
-                // Truncate long PDF names
-                let displayName = tab.title;
-                if(displayName.length > 20) displayName = displayName.substring(0, 17) + '...';
-                titleSpan.textContent = displayName;
-                tabEl.appendChild(titleSpan);
-
-                // Close Button (Not for whiteboard)
                 if (tab.type !== 'whiteboard') {
                     const closeBtn = document.createElement('button');
                     closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-                    closeBtn.className = "ml-2 w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-300 text-gray-500 hover:text-red-500 transition-colors";
-                    closeBtn.onclick = (e) => {
-                        e.stopPropagation(); // prevent switching tab
-                        closeTab(tab.id);
-                    };
+                    closeBtn.className = "ml-3 w-6 h-6 rounded-full flex items-center justify-center bg-black/10 hover:bg-red-500 hover:text-white transition-colors";
+                    closeBtn.onclick = (e) => { e.stopPropagation(); closeTab(tab.id); };
                     tabEl.appendChild(closeBtn);
                 }
 
                 tabBar.appendChild(tabEl);
             });
             
-            // Scroll to active tab
-            const activeTabEl = tabBar.querySelector('.border-brand-orange');
-            if (activeTabEl) {
-                activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            // Update Bottom Toolbar Content
+            if (state.activeTabId === 'whiteboard') {
+                controlsPdf.classList.add('hidden');
+                controlsWb.classList.remove('hidden');
+                controlsWb.classList.add('flex');
+            } else {
+                controlsWb.classList.add('hidden');
+                controlsWb.classList.remove('flex');
+                controlsPdf.classList.remove('hidden');
+                updatePdfControlsUI(state.activeTabId);
             }
+            
+            resetUITimer();
         }
 
         function switchTab(tabId) {
             state.activeTabId = tabId;
             renderTabs();
 
-            // Hide all view containers
-            const views = document.querySelectorAll('.view-container');
-            views.forEach(view => {
-                view.style.display = 'none';
-            });
-
-            // Show active view
+            document.querySelectorAll('.view-container').forEach(view => view.style.display = 'none');
+            
             const activeView = document.getElementById(`view-${tabId}`);
-            if (activeView) {
-                activeView.style.display = 'flex';
-                
-                // If it's a PDF, we might need to re-render to ensure it fits the current window size
-                // especially if the device was rotated while this tab was hidden.
-                if (state.pdfs[tabId]) {
-                    renderPdfPage(tabId, state.pdfs[tabId].pageNum);
-                }
-                
-                // If whiteboard, ensure canvas sizing is correct
-                if (tabId === 'whiteboard') {
-                    resizeWhiteboard();
-                }
-            }
+            if (activeView) activeView.style.display = 'block';
+
+            if (tabId === 'whiteboard') resizeWhiteboard();
+            else if (state.pdfs[tabId]) renderPdfPage(tabId, state.pdfs[tabId].pageNum);
         }
 
         function closeTab(tabId) {
-            // Remove from DOM
-            const viewEl = document.getElementById(`view-${tabId}`);
-            if (viewEl) viewEl.remove();
-
-            // Remove from state
+            document.getElementById(`view-${tabId}`)?.remove();
             state.tabs = state.tabs.filter(t => t.id !== tabId);
             delete state.pdfs[tabId];
-
-            // If we closed the active tab, switch to whiteboard
-            if (state.activeTabId === tabId) {
-                switchTab('whiteboard');
-            } else {
-                renderTabs();
-            }
+            if (state.activeTabId === tabId) switchTab('whiteboard');
+            else renderTabs();
         }
 
         // ==========================================
-        // PDF HANDLING
+        // PDF HANDLING & PINCH-ZOOM
         // ==========================================
-
         addPdfBtn.addEventListener('click', () => pdfUploadInput.click());
 
         pdfUploadInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
-            // Reset input so the same file can be selected again if needed
             e.target.value = '';
 
             const fileReader = new FileReader();
+            addPdfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             
-            // Show loading state on button temporarily
-            const originalBtnHTML = addPdfBtn.innerHTML;
-            addPdfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
-            addPdfBtn.disabled = true;
-
             fileReader.onload = async function() {
                 try {
                     const typedarray = new Uint8Array(this.result);
                     const pdfDoc = await pdfjsLib.getDocument({data: typedarray}).promise;
-                    
                     const tabId = 'pdf-' + Date.now();
                     
-                    // Add to state
-                    state.tabs.push({ 
-                        id: tabId, 
-                        title: file.name.replace('.pdf', ''), 
-                        type: 'pdf', 
-                        icon: 'fa-file-pdf' 
-                    });
-                    
-                    state.pdfs[tabId] = {
-                        doc: pdfDoc,
-                        pageNum: 1,
-                        totalPages: pdfDoc.numPages,
-                        isRendering: false,
-                        pageNumPending: null
-                    };
+                    state.tabs.push({ id: tabId, title: file.name.replace('.pdf', ''), type: 'pdf', icon: 'fa-file-pdf' });
+                    state.pdfs[tabId] = { doc: pdfDoc, pageNum: 1, totalPages: pdfDoc.numPages, isRendering: false, panzoomInstance: null };
 
                     createPdfViewDOM(tabId);
                     switchTab(tabId);
-                } catch (error) {
-                    alert("Error loading PDF: " + error.message);
+                } catch (err) {
+                    alert("Error loading PDF");
                 } finally {
-                    addPdfBtn.innerHTML = originalBtnHTML;
-                    addPdfBtn.disabled = false;
+                    addPdfBtn.innerHTML = '<i class="fa-solid fa-plus"></i> <span class="hidden sm:inline font-semibold">Open PDF</span>';
                 }
             };
-            
             fileReader.readAsArrayBuffer(file);
         });
 
         function createPdfViewDOM(tabId) {
             const viewDiv = document.createElement('div');
             viewDiv.id = `view-${tabId}`;
-            viewDiv.className = 'absolute inset-0 bg-gray-200 flex flex-col view-container';
-            viewDiv.style.display = 'none'; // Hidden initially
+            viewDiv.className = 'absolute inset-0 bg-black view-container flex justify-center items-center overflow-hidden';
+            viewDiv.style.display = 'none';
 
-            // Container for the canvas (scrollable)
-            const canvasContainer = document.createElement('div');
-            canvasContainer.className = 'pdf-canvas-container flex-1 pb-16'; // padding bottom for controls
-            canvasContainer.id = `pdf-container-${tabId}`;
+            // Wrapper is crucial for the panzoom library to work securely
+            const canvasWrapper = document.createElement('div');
+            canvasWrapper.id = `pdf-wrap-${tabId}`;
+            canvasWrapper.className = 'w-full h-full flex justify-center items-center touch-none';
 
             const canvas = document.createElement('canvas');
             canvas.id = `pdf-canvas-${tabId}`;
-            canvas.className = 'shadow-lg bg-white mt-4 max-w-full';
+            canvas.className = 'shadow-2xl';
             
-            canvasContainer.appendChild(canvas);
-            viewDiv.appendChild(canvasContainer);
-
-            // Bottom Navigation Controls
-            const controlsDiv = document.createElement('div');
-            controlsDiv.className = 'absolute bottom-0 left-0 right-0 h-16 bg-brand-dark/90 backdrop-blur text-white flex justify-center items-center gap-4 shadow-[0_-5px_15px_rgba(0,0,0,0.2)] z-10 px-4';
-            
-            const prevBtn = document.createElement('button');
-            prevBtn.className = 'w-10 h-10 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
-            prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
-            prevBtn.onclick = () => queueRenderPage(tabId, state.pdfs[tabId].pageNum - 1);
-
-            const pageInfo = document.createElement('div');
-            pageInfo.className = 'font-semibold tracking-wide min-w-[100px] text-center';
-            pageInfo.id = `pdf-info-${tabId}`;
-            pageInfo.textContent = `1 / ${state.pdfs[tabId].totalPages}`;
-
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'w-10 h-10 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
-            nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
-            nextBtn.onclick = () => queueRenderPage(tabId, state.pdfs[tabId].pageNum + 1);
-
-            controlsDiv.appendChild(prevBtn);
-            controlsDiv.appendChild(pageInfo);
-            controlsDiv.appendChild(nextBtn);
-            viewDiv.appendChild(controlsDiv);
-
-            // Store references to buttons in state for easy updating
-            state.pdfs[tabId].prevBtn = prevBtn;
-            state.pdfs[tabId].nextBtn = nextBtn;
-            state.pdfs[tabId].infoText = pageInfo;
-
+            canvasWrapper.appendChild(canvas);
+            viewDiv.appendChild(canvasWrapper);
             workspace.appendChild(viewDiv);
-        }
 
-        function queueRenderPage(tabId, num) {
-            const pdfState = state.pdfs[tabId];
-            if (!pdfState || num <= 0 || num > pdfState.totalPages) return;
-
-            if (pdfState.isRendering) {
-                pdfState.pageNumPending = num;
-            } else {
-                renderPdfPage(tabId, num);
-            }
+            // Initialize Panzoom for pinch-to-zoom
+            const pz = panzoom(canvas, {
+                maxZoom: 5,
+                minZoom: 1,
+                bounds: true,
+                boundsPadding: 0,
+                smoothScroll: false
+            });
+            state.pdfs[tabId].panzoomInstance = pz;
+            
+            // Tapping PDF toggles Immersive Mode
+            canvasWrapper.addEventListener('click', () => {
+                if(state.ui.isVisible) hideUI(); else showUI();
+            });
         }
 
         async function renderPdfPage(tabId, num) {
             const pdfState = state.pdfs[tabId];
             const canvas = document.getElementById(`pdf-canvas-${tabId}`);
-            const container = document.getElementById(`pdf-container-${tabId}`);
-            
-            if (!pdfState || !canvas || !container) return;
+            const wrapper = document.getElementById(`pdf-wrap-${tabId}`);
+            if (!pdfState || !canvas) return;
 
             pdfState.isRendering = true;
             pdfState.pageNum = num;
+            
+            // Reset zoom before rendering new page
+            if(pdfState.panzoomInstance) {
+                pdfState.panzoomInstance.moveTo(0, 0);
+                pdfState.panzoomInstance.zoomAbs(0, 0, 1);
+            }
 
             try {
                 const page = await pdfState.doc.getPage(num);
-                
-                // Calculate scale to fit width
-                const containerWidth = container.clientWidth - 32; // 32px for padding/margins
                 const unscaledViewport = page.getViewport({ scale: 1.0 });
-                // Limit max scale to 3 to prevent blurry memory issues, but scale up to fit mobile screens
-                const scale = Math.min(containerWidth / unscaledViewport.width, 3); 
                 
-                const viewport = page.getViewport({ scale: scale });
+                // Calculate Fit-To-Screen for Landscape/Portrait
+                const scaleX = wrapper.clientWidth / unscaledViewport.width;
+                const scaleY = wrapper.clientHeight / unscaledViewport.height;
+                const fitScale = Math.min(scaleX, scaleY);
 
-                // Set dimensions
-                const ctx = canvas.getContext('2d');
-                
-                // Support HiDPI displays
+                // Render at higher resolution for crispness when user zooms in
                 const outputScale = window.devicePixelRatio || 1;
-                canvas.width = Math.floor(viewport.width * outputScale);
-                canvas.height = Math.floor(viewport.height * outputScale);
-                canvas.style.width = Math.floor(viewport.width) + "px";
-                canvas.style.height =  Math.floor(viewport.height) + "px";
+                const renderScale = fitScale * outputScale * 1.5; // 1.5x boost
+                
+                const viewport = page.getViewport({ scale: renderScale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                // CSS size forces it to fit screen exact dimensions
+                canvas.style.width = `${unscaledViewport.width * fitScale}px`;
+                canvas.style.height = `${unscaledViewport.height * fitScale}px`;
 
-                const transform = outputScale !== 1 
-                  ? [outputScale, 0, 0, outputScale, 0, 0] 
-                  : null;
-
-                const renderContext = {
-                    canvasContext: ctx,
-                    transform: transform,
+                await page.render({
+                    canvasContext: canvas.getContext('2d'),
                     viewport: viewport
-                };
+                }).promise;
 
-                await page.render(renderContext).promise;
-
-                // Update UI Controls
-                pdfState.infoText.textContent = `${num} / ${pdfState.totalPages}`;
-                pdfState.prevBtn.disabled = num <= 1;
-                pdfState.nextBtn.disabled = num >= pdfState.totalPages;
-
-            } catch (error) {
-                console.error("Error rendering page:", error);
+                updatePdfControlsUI(tabId);
+            } catch (err) {
+                console.log(err);
             } finally {
                 pdfState.isRendering = false;
-                if (pdfState.pageNumPending !== null) {
-                    const nextNum = pdfState.pageNumPending;
-                    pdfState.pageNumPending = null;
-                    renderPdfPage(tabId, nextNum);
-                }
             }
         }
 
+        function updatePdfControlsUI(tabId) {
+            if (state.activeTabId !== tabId || state.tabs.find(t=>t.id === tabId).type !== 'pdf') return;
+            const pdf = state.pdfs[tabId];
+            document.getElementById('pdf-info').textContent = `${pdf.pageNum} / ${pdf.totalPages}`;
+            document.getElementById('pdf-prev').disabled = pdf.pageNum <= 1;
+            document.getElementById('pdf-next').disabled = pdf.pageNum >= pdf.totalPages;
+        }
+
+        // Global PDF Controls Listeners
+        document.getElementById('pdf-prev').onclick = () => {
+            const pdf = state.pdfs[state.activeTabId];
+            if(pdf && !pdf.isRendering && pdf.pageNum > 1) renderPdfPage(state.activeTabId, pdf.pageNum - 1);
+            resetUITimer();
+        };
+        document.getElementById('pdf-next').onclick = () => {
+            const pdf = state.pdfs[state.activeTabId];
+            if(pdf && !pdf.isRendering && pdf.pageNum < pdf.totalPages) renderPdfPage(state.activeTabId, pdf.pageNum + 1);
+            resetUITimer();
+        };
+
+
         // ==========================================
-        // WHITEBOARD HANDLING
+        // WHITEBOARD & VECTOR DRAWING
         // ==========================================
         const wbCanvas = document.getElementById('wb-canvas');
         const wbCtx = wbCanvas.getContext('2d');
-        const wbContainer = document.getElementById('wb-container');
-        
-        // Menus and Settings
-        const wbMenuBtn = document.getElementById('wb-menu-btn');
-        const wbSettingsPanel = document.getElementById('wb-settings-panel');
-        const wbCloseMenu = document.getElementById('wb-close-menu');
+        const wbContainer = document.getElementById('view-whiteboard');
+
+        // Setup Toolbar actions
         const colorBtns = document.querySelectorAll('.color-btn');
-        const penSizeInput = document.getElementById('pen-size');
-        const sizeLabel = document.getElementById('size-label');
-        const clearBtn = document.getElementById('wb-clear-btn');
+        const btnEraser = document.getElementById('wb-eraser');
+        const btnUndo = document.getElementById('wb-undo');
+        const btnRedo = document.getElementById('wb-redo');
+        const btnClear = document.getElementById('wb-clear');
 
-        // Toggle settings panel
-        wbMenuBtn.addEventListener('click', () => {
-            wbSettingsPanel.classList.toggle('hidden');
-        });
-        wbCloseMenu.addEventListener('click', () => {
-            wbSettingsPanel.classList.add('hidden');
-        });
+        function updateWbButtons() {
+            btnUndo.disabled = state.whiteboard.paths.length === 0;
+            btnRedo.disabled = state.whiteboard.redoPaths.length === 0;
+            
+            // Highlight eraser
+            if(state.whiteboard.isEraser) {
+                btnEraser.classList.replace('bg-gray-700', 'bg-brand-orange');
+                colorBtns.forEach(b => b.classList.remove('ring-2', 'ring-brand-orange', 'ring-offset-2', 'ring-offset-brand-dark'));
+            } else {
+                btnEraser.classList.replace('bg-brand-orange', 'bg-gray-700');
+            }
+        }
 
-        // Color selection
         colorBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const color = e.currentTarget.dataset.color;
-                state.whiteboard.color = color;
+                state.whiteboard.isEraser = false;
+                state.whiteboard.color = e.currentTarget.dataset.color;
                 
-                // Update active state visuals
                 colorBtns.forEach(b => {
-                    b.classList.remove('ring-2', 'ring-brand-orange', 'ring-offset-1', 'border-transparent');
-                    if(b.dataset.color !== '#ffffff' && b.dataset.color !== '#000000') {
-                        b.classList.add('border-transparent');
-                    }
+                    b.classList.remove('ring-2', 'ring-brand-orange', 'ring-offset-2', 'ring-offset-brand-dark', 'border-transparent');
+                    if(b !== e.currentTarget) b.classList.add('border-transparent');
                 });
-                
-                e.currentTarget.classList.add('ring-2', 'ring-brand-orange', 'ring-offset-1');
-                if(color !== '#ffffff' && color !== '#000000') {
-                    e.currentTarget.classList.remove('border-transparent');
-                }
+                e.currentTarget.classList.add('ring-2', 'ring-brand-orange', 'ring-offset-2', 'ring-offset-brand-dark');
+                e.currentTarget.classList.remove('border-transparent');
+                updateWbButtons();
+                resetUITimer();
             });
         });
 
-        // Size selection
-        penSizeInput.addEventListener('input', (e) => {
-            state.whiteboard.size = e.target.value;
-            sizeLabel.textContent = e.target.value;
+        btnEraser.addEventListener('click', () => {
+            state.whiteboard.isEraser = true;
+            updateWbButtons();
+            resetUITimer();
         });
 
-        // Clear whiteboard
-        clearBtn.addEventListener('click', () => {
-            wbCtx.clearRect(0, 0, wbCanvas.width, wbCanvas.height);
-            wbSettingsPanel.classList.add('hidden');
+        btnClear.addEventListener('click', () => {
+            state.whiteboard.paths = [];
+            state.whiteboard.redoPaths = [];
+            redrawWhiteboard();
+            resetUITimer();
         });
 
-        // Resize Canvas safely (retaining drawing)
+        btnUndo.addEventListener('click', () => {
+            if (state.whiteboard.paths.length > 0) {
+                state.whiteboard.redoPaths.push(state.whiteboard.paths.pop());
+                redrawWhiteboard();
+            }
+            resetUITimer();
+        });
+
+        btnRedo.addEventListener('click', () => {
+            if (state.whiteboard.redoPaths.length > 0) {
+                state.whiteboard.paths.push(state.whiteboard.redoPaths.pop());
+                redrawWhiteboard();
+            }
+            resetUITimer();
+        });
+
         function resizeWhiteboard() {
             if (state.activeTabId !== 'whiteboard') return;
-
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = wbCanvas.width || 1;
-            tempCanvas.height = wbCanvas.height || 1;
-            tempCtx.drawImage(wbCanvas, 0, 0);
-
-            // Set new actual dimensions based on container
             wbCanvas.width = wbContainer.clientWidth;
             wbCanvas.height = wbContainer.clientHeight;
-
-            // Restore drawing
-            wbCtx.drawImage(tempCanvas, 0, 0);
-            
-            // Reapply context settings
-            wbCtx.lineCap = 'round';
-            wbCtx.lineJoin = 'round';
+            redrawWhiteboard();
         }
 
-        // Drawing Logic
-        let lastX = 0;
-        let lastY = 0;
+        function redrawWhiteboard() {
+            wbCtx.clearRect(0, 0, wbCanvas.width, wbCanvas.height);
+            wbCtx.lineCap = 'round';
+            wbCtx.lineJoin = 'round';
 
-        function getCoordinates(e) {
+            state.whiteboard.paths.forEach(p => {
+                wbCtx.beginPath();
+                if (p.isEraser) {
+                    wbCtx.globalCompositeOperation = 'destination-out';
+                    wbCtx.lineWidth = 30; // Eraser size
+                } else {
+                    wbCtx.globalCompositeOperation = 'source-over';
+                    wbCtx.strokeStyle = p.color;
+                    wbCtx.lineWidth = p.size;
+                }
+                
+                if (p.points.length > 0) {
+                    wbCtx.moveTo(p.points[0].x, p.points[0].y);
+                    for(let i = 1; i < p.points.length; i++) {
+                        wbCtx.lineTo(p.points[i].x, p.points[i].y);
+                    }
+                    wbCtx.stroke();
+                }
+            });
+            updateWbButtons();
+        }
+
+        function getCoords(e) {
             const rect = wbCanvas.getBoundingClientRect();
             if (e.touches && e.touches.length > 0) {
-                return [
-                    e.touches[0].clientX - rect.left,
-                    e.touches[0].clientY - rect.top
-                ];
+                return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
             }
-            return [
-                e.clientX - rect.left,
-                e.clientY - rect.top
-            ];
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         }
 
         function startDrawing(e) {
-            if (e.target !== wbCanvas) return;
-            e.preventDefault(); // Prevent scrolling
-            state.whiteboard.isDrawing = true;
-            [lastX, lastY] = getCoordinates(e);
+            if (e.target !== wbCanvas || e.touches?.length > 1) return;
+            e.preventDefault();
             
-            // Hide settings panel if open when starting to draw
-            if(!wbSettingsPanel.classList.contains('hidden')) {
-                wbSettingsPanel.classList.add('hidden');
+            // Interaction handles immersive mode
+            clearTimeout(state.ui.timeout);
+            
+            state.whiteboard.isDrawing = true;
+            const pt = getCoords(e);
+            
+            state.whiteboard.currentPath = {
+                color: state.whiteboard.color,
+                size: state.whiteboard.size,
+                isEraser: state.whiteboard.isEraser,
+                points: [pt]
+            };
+
+            // Setup real-time drawing context
+            wbCtx.beginPath();
+            if (state.whiteboard.isEraser) {
+                wbCtx.globalCompositeOperation = 'destination-out';
+                wbCtx.lineWidth = 30;
+            } else {
+                wbCtx.globalCompositeOperation = 'source-over';
+                wbCtx.strokeStyle = state.whiteboard.color;
+                wbCtx.lineWidth = state.whiteboard.size;
             }
+            wbCtx.lineCap = 'round';
+            wbCtx.lineJoin = 'round';
+            wbCtx.moveTo(pt.x, pt.y);
+            wbCtx.lineTo(pt.x, pt.y); // Draw dot on click
+            wbCtx.stroke();
         }
 
         function draw(e) {
             if (!state.whiteboard.isDrawing) return;
             e.preventDefault();
+            const pt = getCoords(e);
             
-            const [currentX, currentY] = getCoordinates(e);
-
-            wbCtx.beginPath();
-            wbCtx.moveTo(lastX, lastY);
-            wbCtx.lineTo(currentX, currentY);
-            wbCtx.strokeStyle = state.whiteboard.color;
-            wbCtx.lineWidth = state.whiteboard.size;
-            wbCtx.lineCap = 'round';
-            wbCtx.lineJoin = 'round';
+            state.whiteboard.currentPath.points.push(pt);
+            wbCtx.lineTo(pt.x, pt.y);
             wbCtx.stroke();
-
-            [lastX, lastY] = [currentX, currentY];
         }
 
         function stopDrawing() {
-            state.whiteboard.isDrawing = false;
+            if (state.whiteboard.isDrawing) {
+                state.whiteboard.isDrawing = false;
+                if (state.whiteboard.currentPath) {
+                    state.whiteboard.paths.push(state.whiteboard.currentPath);
+                    state.whiteboard.redoPaths = []; // Clear redo history on new action
+                    state.whiteboard.currentPath = null;
+                }
+                updateWbButtons();
+                resetUITimer(); // restart the UI hide timer
+            }
         }
 
         // Mouse Events
@@ -586,26 +578,23 @@
         wbCanvas.addEventListener('touchcancel', stopDrawing);
 
         // ==========================================
-        // GLOBAL EVENTS (Resize & Orientation)
+        // INITIALIZATION & RESIZE HANDLING
         // ==========================================
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
-                if (state.activeTabId === 'whiteboard') {
-                    resizeWhiteboard();
-                } else if (state.pdfs[state.activeTabId]) {
-                    // Re-render PDF page to fit new width
-                    renderPdfPage(state.activeTabId, state.pdfs[state.activeTabId].pageNum);
-                }
-            }, 200); // Debounce resize events
+                if (state.activeTabId === 'whiteboard') resizeWhiteboard();
+                else if (state.pdfs[state.activeTabId]) renderPdfPage(state.activeTabId, state.pdfs[state.activeTabId].pageNum);
+            }, 300);
         });
 
-        // Initialize App
         window.addEventListener('DOMContentLoaded', () => {
             renderTabs();
-            // Initial canvas size setup
-            setTimeout(resizeWhiteboard, 100); 
+            setTimeout(() => {
+                resizeWhiteboard();
+                showUI(); // Starts the auto-hide timer naturally
+            }, 100); 
         });
 
     </script>
