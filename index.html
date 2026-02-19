@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Presenta by MAHADUMIA</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            orange: '#f97316', // Tailwind orange-500
+                            dark: '#000000',
+                            light: '#ffffff'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbar for tabs */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Prevent pull-to-refresh and bounce on mobile */
+        body {
+            overscroll-behavior-y: none;
+            touch-action: none;
+        }
+
+        /* Ensure canvases don't trigger selection */
+        canvas {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .pdf-canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-y: auto;
+            height: 100%;
+            width: 100%;
+            background-color: #f3f4f6; /* Gray-100 */
+        }
+    </style>
+</head>
+<body class="bg-brand-light text-brand-dark h-screen w-screen flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <header class="bg-brand-dark text-brand-light h-14 flex justify-between items-center px-4 flex-shrink-0 shadow-md z-20">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-layer-group text-brand-orange text-xl"></i>
+            <h1 class="text-brand-orange font-bold text-xl tracking-wide">
+                Presenta <span class="text-xs font-light text-brand-light ml-1 opacity-80">by MAHADUMIA</span>
+            </h1>
+        </div>
+        <div>
+            <button id="add-pdf-btn" class="bg-brand-orange hover:bg-orange-600 text-white px-3 py-1.5 rounded shadow-sm flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-file-pdf"></i>
+                <span class="hidden sm:inline font-semibold">Open PDF</span>
+            </button>
+            <input type="file" id="pdf-upload" accept="application/pdf" class="hidden">
+        </div>
+    </header>
+
+    <!-- Tabs Navigation -->
+    <nav class="bg-gray-100 border-b border-gray-300 h-12 flex-shrink-0 flex items-center px-2 hide-scrollbar overflow-x-auto shadow-sm z-10" id="tab-bar">
+        <!-- Tabs will be dynamically injected here -->
+    </nav>
+
+    <!-- Main Workspace Area -->
+    <main id="workspace" class="flex-1 relative overflow-hidden bg-gray-200">
+        
+        <!-- ================= WHITEBOARD VIEW (Always exists) ================= -->
+        <div id="view-whiteboard" class="absolute inset-0 bg-white flex flex-col view-container" style="display: block;">
+            
+            <!-- Canvas Container -->
+            <div class="flex-1 relative w-full h-full" id="wb-container">
+                <canvas id="wb-canvas" class="absolute top-0 left-0 w-full h-full cursor-crosshair touch-none"></canvas>
+            </div>
+
+            <!-- Hamburger Settings Button -->
+            <button id="wb-menu-btn" class="absolute top-4 right-4 w-12 h-12 bg-brand-dark text-brand-light rounded-full shadow-lg flex items-center justify-center text-xl hover:bg-gray-800 transition-transform active:scale-95 z-20">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
+            <!-- Hamburger Settings Panel -->
+            <div id="wb-settings-panel" class="hidden absolute top-16 right-4 w-64 bg-white border border-gray-200 shadow-2xl rounded-lg p-5 z-30 flex flex-col gap-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="font-bold text-gray-800">Ink Settings</h3>
+                    <button id="wb-close-menu" class="text-gray-500 hover:text-brand-dark"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                
+                <!-- Color Picker -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Color</label>
+                    <div class="flex gap-2 flex-wrap" id="color-palette">
+                        <button class="w-8 h-8 rounded-full bg-black border-2 border-gray-300 color-btn" data-color="#000000"></button>
+                        <button class="w-8 h-8 rounded-full bg-brand-orange border-2 border-transparent color-btn ring-2 ring-brand-orange ring-offset-1" data-color="#f97316"></button>
+                        <button class="w-8 h-8 rounded-full bg-blue-600 border-2 border-transparent color-btn" data-color="#2563eb"></button>
+                        <button class="w-8 h-8 rounded-full bg-green-600 border-2 border-transparent color-btn" data-color="#16a34a"></button>
+                        <button class="w-8 h-8 rounded-full bg-red-600 border-2 border-transparent color-btn" data-color="#dc2626"></button>
+                        <!-- Eraser -->
+                        <button class="w-8 h-8 rounded-full bg-white border-2 border-gray-300 color-btn flex items-center justify-center text-gray-400" data-color="#ffffff" title="Eraser">
+                            <i class="fa-solid fa-eraser text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pen Size -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Pen Size (<span id="size-label">3</span>px)</label>
+                    <input type="range" id="pen-size" min="1" max="20" value="3" class="w-full accent-brand-orange">
+                </div>
+                
+                <button id="wb-clear-btn" class="mt-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded border border-gray-300 transition-colors">
+                    <i class="fa-solid fa-trash-can mr-2"></i> Clear Whiteboard
+                </button>
+            </div>
+        </div>
+
+        <!-- PDF Views will be dynamically appended here as absolute full-size containers -->
+
+    </main>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION & STATE
+        // ==========================================
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        const state = {
+            tabs: [
+                { id: 'whiteboard', title: 'Whiteboard', type: 'whiteboard', icon: 'fa-pen-to-square' }
+            ],
+            activeTabId: 'whiteboard',
+            pdfs: {}, // stores PDFDocumentProxy and page state per tab ID
+            whiteboard: {
+                isDrawing: false,
+                color: '#f97316', // Default to brand orange
+                size: 3
+            }
+        };
+
+        // DOM Elements
+        const tabBar = document.getElementById('tab-bar');
+        const workspace = document.getElementById('workspace');
+        const pdfUploadInput = document.getElementById('pdf-upload');
+        const addPdfBtn = document.getElementById('add-pdf-btn');
+
+        // ==========================================
+        // TAB MANAGEMENT
+        // ==========================================
+        
+        function renderTabs() {
+            tabBar.innerHTML = '';
+            state.tabs.forEach(tab => {
+                const isActive = tab.id === state.activeTabId;
+                const tabEl = document.createElement('div');
+                
+                // Styling active vs inactive
+                const baseClasses = "flex items-center gap-2 px-4 py-2 mx-1 rounded-t-lg cursor-pointer transition-colors min-w-max select-none";
+                const activeClasses = "bg-white text-brand-dark border-t-2 border-brand-orange font-bold shadow-[0_-2px_5px_rgba(0,0,0,0.05)]";
+                const inactiveClasses = "bg-gray-200 text-gray-600 hover:bg-gray-300 font-medium";
+                
+                tabEl.className = `${baseClasses} ${isActive ? activeClasses : inactiveClasses}`;
+                tabEl.onclick = () => switchTab(tab.id);
+
+                // Icon
+                const icon = document.createElement('i');
+                icon.className = `fa-solid ${tab.icon} ${isActive ? 'text-brand-orange' : 'text-gray-500'}`;
+                tabEl.appendChild(icon);
+
+                // Title
+                const titleSpan = document.createElement('span');
+                // Truncate long PDF names
+                let displayName = tab.title;
+                if(displayName.length > 20) displayName = displayName.substring(0, 17) + '...';
+                titleSpan.textContent = displayName;
+                tabEl.appendChild(titleSpan);
+
+                // Close Button (Not for whiteboard)
+                if (tab.type !== 'whiteboard') {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    closeBtn.className = "ml-2 w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-300 text-gray-500 hover:text-red-500 transition-colors";
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation(); // prevent switching tab
+                        closeTab(tab.id);
+                    };
+                    tabEl.appendChild(closeBtn);
+                }
+
+                tabBar.appendChild(tabEl);
+            });
+            
+            // Scroll to active tab
+            const activeTabEl = tabBar.querySelector('.border-brand-orange');
+            if (activeTabEl) {
+                activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }
+
+        function switchTab(tabId) {
+            state.activeTabId = tabId;
+            renderTabs();
+
+            // Hide all view containers
+            const views = document.querySelectorAll('.view-container');
+            views.forEach(view => {
+                view.style.display = 'none';
+            });
+
+            // Show active view
+            const activeView = document.getElementById(`view-${tabId}`);
+            if (activeView) {
+                activeView.style.display = 'flex';
+                
+                // If it's a PDF, we might need to re-render to ensure it fits the current window size
+                // especially if the device was rotated while this tab was hidden.
+                if (state.pdfs[tabId]) {
+                    renderPdfPage(tabId, state.pdfs[tabId].pageNum);
+                }
+                
+                // If whiteboard, ensure canvas sizing is correct
+                if (tabId === 'whiteboard') {
+                    resizeWhiteboard();
+                }
+            }
+        }
+
+        function closeTab(tabId) {
+            // Remove from DOM
+            const viewEl = document.getElementById(`view-${tabId}`);
+            if (viewEl) viewEl.remove();
+
+            // Remove from state
+            state.tabs = state.tabs.filter(t => t.id !== tabId);
+            delete state.pdfs[tabId];
+
+            // If we closed the active tab, switch to whiteboard
+            if (state.activeTabId === tabId) {
+                switchTab('whiteboard');
+            } else {
+                renderTabs();
+            }
+        }
+
+        // ==========================================
+        // PDF HANDLING
+        // ==========================================
+
+        addPdfBtn.addEventListener('click', () => pdfUploadInput.click());
+
+        pdfUploadInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Reset input so the same file can be selected again if needed
+            e.target.value = '';
+
+            const fileReader = new FileReader();
+            
+            // Show loading state on button temporarily
+            const originalBtnHTML = addPdfBtn.innerHTML;
+            addPdfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+            addPdfBtn.disabled = true;
+
+            fileReader.onload = async function() {
+                try {
+                    const typedarray = new Uint8Array(this.result);
+                    const pdfDoc = await pdfjsLib.getDocument({data: typedarray}).promise;
+                    
+                    const tabId = 'pdf-' + Date.now();
+                    
+                    // Add to state
+                    state.tabs.push({ 
+                        id: tabId, 
+                        title: file.name.replace('.pdf', ''), 
+                        type: 'pdf', 
+                        icon: 'fa-file-pdf' 
+                    });
+                    
+                    state.pdfs[tabId] = {
+                        doc: pdfDoc,
+                        pageNum: 1,
+                        totalPages: pdfDoc.numPages,
+                        isRendering: false,
+                        pageNumPending: null
+                    };
+
+                    createPdfViewDOM(tabId);
+                    switchTab(tabId);
+                } catch (error) {
+                    alert("Error loading PDF: " + error.message);
+                } finally {
+                    addPdfBtn.innerHTML = originalBtnHTML;
+                    addPdfBtn.disabled = false;
+                }
+            };
+            
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        function createPdfViewDOM(tabId) {
+            const viewDiv = document.createElement('div');
+            viewDiv.id = `view-${tabId}`;
+            viewDiv.className = 'absolute inset-0 bg-gray-200 flex flex-col view-container';
+            viewDiv.style.display = 'none'; // Hidden initially
+
+            // Container for the canvas (scrollable)
+            const canvasContainer = document.createElement('div');
+            canvasContainer.className = 'pdf-canvas-container flex-1 pb-16'; // padding bottom for controls
+            canvasContainer.id = `pdf-container-${tabId}`;
+
+            const canvas = document.createElement('canvas');
+            canvas.id = `pdf-canvas-${tabId}`;
+            canvas.className = 'shadow-lg bg-white mt-4 max-w-full';
+            
+            canvasContainer.appendChild(canvas);
+            viewDiv.appendChild(canvasContainer);
+
+            // Bottom Navigation Controls
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'absolute bottom-0 left-0 right-0 h-16 bg-brand-dark/90 backdrop-blur text-white flex justify-center items-center gap-4 shadow-[0_-5px_15px_rgba(0,0,0,0.2)] z-10 px-4';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'w-10 h-10 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+            prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+            prevBtn.onclick = () => queueRenderPage(tabId, state.pdfs[tabId].pageNum - 1);
+
+            const pageInfo = document.createElement('div');
+            pageInfo.className = 'font-semibold tracking-wide min-w-[100px] text-center';
+            pageInfo.id = `pdf-info-${tabId}`;
+            pageInfo.textContent = `1 / ${state.pdfs[tabId].totalPages}`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'w-10 h-10 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+            nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+            nextBtn.onclick = () => queueRenderPage(tabId, state.pdfs[tabId].pageNum + 1);
+
+            controlsDiv.appendChild(prevBtn);
+            controlsDiv.appendChild(pageInfo);
+            controlsDiv.appendChild(nextBtn);
+            viewDiv.appendChild(controlsDiv);
+
+            // Store references to buttons in state for easy updating
+            state.pdfs[tabId].prevBtn = prevBtn;
+            state.pdfs[tabId].nextBtn = nextBtn;
+            state.pdfs[tabId].infoText = pageInfo;
+
+            workspace.appendChild(viewDiv);
+        }
+
+        function queueRenderPage(tabId, num) {
+            const pdfState = state.pdfs[tabId];
+            if (!pdfState || num <= 0 || num > pdfState.totalPages) return;
+
+            if (pdfState.isRendering) {
+                pdfState.pageNumPending = num;
+            } else {
+                renderPdfPage(tabId, num);
+            }
+        }
+
+        async function renderPdfPage(tabId, num) {
+            const pdfState = state.pdfs[tabId];
+            const canvas = document.getElementById(`pdf-canvas-${tabId}`);
+            const container = document.getElementById(`pdf-container-${tabId}`);
+            
+            if (!pdfState || !canvas || !container) return;
+
+            pdfState.isRendering = true;
+            pdfState.pageNum = num;
+
+            try {
+                const page = await pdfState.doc.getPage(num);
+                
+                // Calculate scale to fit width
+                const containerWidth = container.clientWidth - 32; // 32px for padding/margins
+                const unscaledViewport = page.getViewport({ scale: 1.0 });
+                // Limit max scale to 3 to prevent blurry memory issues, but scale up to fit mobile screens
+                const scale = Math.min(containerWidth / unscaledViewport.width, 3); 
+                
+                const viewport = page.getViewport({ scale: scale });
+
+                // Set dimensions
+                const ctx = canvas.getContext('2d');
+                
+                // Support HiDPI displays
+                const outputScale = window.devicePixelRatio || 1;
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                canvas.style.width = Math.floor(viewport.width) + "px";
+                canvas.style.height =  Math.floor(viewport.height) + "px";
+
+                const transform = outputScale !== 1 
+                  ? [outputScale, 0, 0, outputScale, 0, 0] 
+                  : null;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    transform: transform,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+
+                // Update UI Controls
+                pdfState.infoText.textContent = `${num} / ${pdfState.totalPages}`;
+                pdfState.prevBtn.disabled = num <= 1;
+                pdfState.nextBtn.disabled = num >= pdfState.totalPages;
+
+            } catch (error) {
+                console.error("Error rendering page:", error);
+            } finally {
+                pdfState.isRendering = false;
+                if (pdfState.pageNumPending !== null) {
+                    const nextNum = pdfState.pageNumPending;
+                    pdfState.pageNumPending = null;
+                    renderPdfPage(tabId, nextNum);
+                }
+            }
+        }
+
+        // ==========================================
+        // WHITEBOARD HANDLING
+        // ==========================================
+        const wbCanvas = document.getElementById('wb-canvas');
+        const wbCtx = wbCanvas.getContext('2d');
+        const wbContainer = document.getElementById('wb-container');
+        
+        // Menus and Settings
+        const wbMenuBtn = document.getElementById('wb-menu-btn');
+        const wbSettingsPanel = document.getElementById('wb-settings-panel');
+        const wbCloseMenu = document.getElementById('wb-close-menu');
+        const colorBtns = document.querySelectorAll('.color-btn');
+        const penSizeInput = document.getElementById('pen-size');
+        const sizeLabel = document.getElementById('size-label');
+        const clearBtn = document.getElementById('wb-clear-btn');
+
+        // Toggle settings panel
+        wbMenuBtn.addEventListener('click', () => {
+            wbSettingsPanel.classList.toggle('hidden');
+        });
+        wbCloseMenu.addEventListener('click', () => {
+            wbSettingsPanel.classList.add('hidden');
+        });
+
+        // Color selection
+        colorBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const color = e.currentTarget.dataset.color;
+                state.whiteboard.color = color;
+                
+                // Update active state visuals
+                colorBtns.forEach(b => {
+                    b.classList.remove('ring-2', 'ring-brand-orange', 'ring-offset-1', 'border-transparent');
+                    if(b.dataset.color !== '#ffffff' && b.dataset.color !== '#000000') {
+                        b.classList.add('border-transparent');
+                    }
+                });
+                
+                e.currentTarget.classList.add('ring-2', 'ring-brand-orange', 'ring-offset-1');
+                if(color !== '#ffffff' && color !== '#000000') {
+                    e.currentTarget.classList.remove('border-transparent');
+                }
+            });
+        });
+
+        // Size selection
+        penSizeInput.addEventListener('input', (e) => {
+            state.whiteboard.size = e.target.value;
+            sizeLabel.textContent = e.target.value;
+        });
+
+        // Clear whiteboard
+        clearBtn.addEventListener('click', () => {
+            wbCtx.clearRect(0, 0, wbCanvas.width, wbCanvas.height);
+            wbSettingsPanel.classList.add('hidden');
+        });
+
+        // Resize Canvas safely (retaining drawing)
+        function resizeWhiteboard() {
+            if (state.activeTabId !== 'whiteboard') return;
+
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = wbCanvas.width || 1;
+            tempCanvas.height = wbCanvas.height || 1;
+            tempCtx.drawImage(wbCanvas, 0, 0);
+
+            // Set new actual dimensions based on container
+            wbCanvas.width = wbContainer.clientWidth;
+            wbCanvas.height = wbContainer.clientHeight;
+
+            // Restore drawing
+            wbCtx.drawImage(tempCanvas, 0, 0);
+            
+            // Reapply context settings
+            wbCtx.lineCap = 'round';
+            wbCtx.lineJoin = 'round';
+        }
+
+        // Drawing Logic
+        let lastX = 0;
+        let lastY = 0;
+
+        function getCoordinates(e) {
+            const rect = wbCanvas.getBoundingClientRect();
+            if (e.touches && e.touches.length > 0) {
+                return [
+                    e.touches[0].clientX - rect.left,
+                    e.touches[0].clientY - rect.top
+                ];
+            }
+            return [
+                e.clientX - rect.left,
+                e.clientY - rect.top
+            ];
+        }
+
+        function startDrawing(e) {
+            if (e.target !== wbCanvas) return;
+            e.preventDefault(); // Prevent scrolling
+            state.whiteboard.isDrawing = true;
+            [lastX, lastY] = getCoordinates(e);
+            
+            // Hide settings panel if open when starting to draw
+            if(!wbSettingsPanel.classList.contains('hidden')) {
+                wbSettingsPanel.classList.add('hidden');
+            }
+        }
+
+        function draw(e) {
+            if (!state.whiteboard.isDrawing) return;
+            e.preventDefault();
+            
+            const [currentX, currentY] = getCoordinates(e);
+
+            wbCtx.beginPath();
+            wbCtx.moveTo(lastX, lastY);
+            wbCtx.lineTo(currentX, currentY);
+            wbCtx.strokeStyle = state.whiteboard.color;
+            wbCtx.lineWidth = state.whiteboard.size;
+            wbCtx.lineCap = 'round';
+            wbCtx.lineJoin = 'round';
+            wbCtx.stroke();
+
+            [lastX, lastY] = [currentX, currentY];
+        }
+
+        function stopDrawing() {
+            state.whiteboard.isDrawing = false;
+        }
+
+        // Mouse Events
+        wbCanvas.addEventListener('mousedown', startDrawing);
+        wbCanvas.addEventListener('mousemove', draw);
+        wbCanvas.addEventListener('mouseup', stopDrawing);
+        wbCanvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch Events
+        wbCanvas.addEventListener('touchstart', startDrawing, { passive: false });
+        wbCanvas.addEventListener('touchmove', draw, { passive: false });
+        wbCanvas.addEventListener('touchend', stopDrawing);
+        wbCanvas.addEventListener('touchcancel', stopDrawing);
+
+        // ==========================================
+        // GLOBAL EVENTS (Resize & Orientation)
+        // ==========================================
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (state.activeTabId === 'whiteboard') {
+                    resizeWhiteboard();
+                } else if (state.pdfs[state.activeTabId]) {
+                    // Re-render PDF page to fit new width
+                    renderPdfPage(state.activeTabId, state.pdfs[state.activeTabId].pageNum);
+                }
+            }, 200); // Debounce resize events
+        });
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            renderTabs();
+            // Initial canvas size setup
+            setTimeout(resizeWhiteboard, 100); 
+        });
+
+    </script>
+</body>
+</html>
