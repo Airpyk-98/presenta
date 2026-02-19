@@ -71,8 +71,13 @@
         </div>
 
         <!-- Bottom Bar Group -->
-        <div id="bottom-bar" class="ui-transition pointer-events-auto bg-brand-dark/95 backdrop-blur shadow-[0_-5px_20px_rgba(0,0,0,0.3)] w-full h-16 flex justify-center items-center px-2">
+        <div id="bottom-bar" class="ui-transition pointer-events-auto bg-brand-dark/95 backdrop-blur shadow-[0_-5px_20px_rgba(0,0,0,0.3)] w-full h-16 flex justify-center items-center px-2 relative">
             
+            <!-- Hide UI Button -->
+            <button onclick="hideUI()" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 text-gray-300 hover:text-white active:scale-90 transition-all shadow border border-gray-600 z-50">
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+
             <!-- PDF Controls -->
             <div id="controls-pdf" class="hidden flex items-center gap-6 text-white w-full max-w-md justify-between px-4">
                 <button id="pdf-prev" class="w-12 h-12 rounded-full bg-brand-orange hover:bg-orange-600 flex items-center justify-center disabled:opacity-50 text-xl shadow-lg active:scale-90 transition-transform"><i class="fa-solid fa-chevron-left"></i></button>
@@ -309,17 +314,42 @@
             workspace.appendChild(viewDiv);
 
             // Initialize Panzoom for pinch-to-zoom
-            const pz = panzoom(canvas, {
+            let pz;
+            pz = panzoom(canvas, {
                 maxZoom: 5,
                 minZoom: 1,
                 bounds: true,
                 boundsPadding: 0,
-                smoothScroll: false
+                smoothScroll: false,
+                beforePan: function(e) {
+                    // Lock panning completely if zoomed out to prevent moving the page away
+                    if (!pz) return false;
+                    return pz.getTransform().scale <= 1.01;
+                }
             });
             state.pdfs[tabId].panzoomInstance = pz;
             
-            // Tapping PDF toggles Immersive Mode
-            canvasWrapper.addEventListener('click', () => {
+            // Tapping PDF toggles Immersive Mode or navigates pages
+            canvasWrapper.addEventListener('click', (e) => {
+                const pdfState = state.pdfs[tabId];
+                if (!pdfState || !pdfState.panzoomInstance) return;
+                
+                const scale = pdfState.panzoomInstance.getTransform().scale;
+                const rect = canvasWrapper.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+
+                // If fully zoomed out, tapping extreme edges navigates pages
+                if (scale <= 1.05) {
+                    if (x < rect.width * 0.2) {
+                        document.getElementById('pdf-prev').click();
+                        return;
+                    } else if (x > rect.width * 0.8) {
+                        document.getElementById('pdf-next').click();
+                        return;
+                    }
+                }
+                
+                // Otherwise toggle UI
                 if(state.ui.isVisible) hideUI(); else showUI();
             });
         }
